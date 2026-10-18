@@ -8,12 +8,23 @@ import type { SenderKeyStore } from './Group/group_cipher'
 import { SenderKeyName } from './Group/sender-key-name'
 import { SenderKeyRecord } from './Group/sender-key-record'
 import { GroupCipher, GroupSessionBuilder, SenderKeyDistributionMessage } from './Group'
+import { DeviceIdentity } from './identity'
 
-export function makeLibSignalRepository(auth: SignalAuthState): SignalRepository {
+export function makeLibSignalRepository(auth: SignalAuthState, identity?: DeviceIdentity): SignalRepository {
+	// KWHATS: sem mapa fornecido, ainda assim um vazio, para o caminho canônico
+	// ser SEMPRE o mesmo (com ou sem hospedeiro configurado).
+	const ids = identity || new DeviceIdentity()
+
+	// Semente que sozinha resolve o caso mais grave: os aparelhos do próprio
+	// usuário. As credenciais já guardam as duas identidades da conta, e é
+	// justamente o fanout das mensagens próprias que o servidor roteia ora por
+	// número ora por LID. Sem isto, o cliente racha a sessão consigo mesmo.
+	ids.link(auth.creds?.me?.lid, auth.creds?.me?.id)
+
 	const storage: SenderKeyStore = signalStorage(auth)
 	return {
 		decryptGroupMessage({ group, authorJid, msg }) {
-			const senderName = jidToSignalSenderKeyName(group, authorJid)
+			const senderName = jidToSignalSenderKeyName(group, authorJid, ids)
 			const cipher = new GroupCipher(storage, senderName)
 
 			return cipher.decrypt(msg)
@@ -24,7 +35,7 @@ export function makeLibSignalRepository(auth: SignalAuthState): SignalRepository
 				throw new Error('Group ID is required for sender key distribution message')
 			}
 
-			const senderName = jidToSignalSenderKeyName(item.groupId, authorJid)
+			const senderName = jidToSignalSenderKeyName(item.groupId, authorJid, ids)
 
 			const senderMsg = new SenderKeyDistributionMessage(
 				null,
@@ -42,7 +53,7 @@ export function makeLibSignalRepository(auth: SignalAuthState): SignalRepository
 			await builder.process(senderName, senderMsg)
 		},
 		async decryptMessage({ jid, type, ciphertext }) {
-			const addr = jidToSignalProtocolAddress(jid)
+			const addr = jidToSignalProtocolAddress(jid, ids)
 			const session = new libsignal.SessionCipher(storage, addr)
 			let result: Buffer
 			switch (type) {
@@ -59,7 +70,7 @@ export function makeLibSignalRepository(auth: SignalAuthState): SignalRepository
 			return result
 		},
 		async encryptMessage({ jid, data }) {
-			const addr = jidToSignalProtocolAddress(jid)
+			const addr = jidToSignalProtocolAddress(jid, ids)
 			const cipher = new libsignal.SessionCipher(storage, addr)
 
 			const { type: sigType, body } = await cipher.encrypt(data)
@@ -67,7 +78,7 @@ export function makeLibSignalRepository(auth: SignalAuthState): SignalRepository
 			return { type, ciphertext: Buffer.from(body, 'binary') }
 		},
 		async encryptGroupMessage({ group, meId, data }) {
-			const senderName = jidToSignalSenderKeyName(group, meId)
+			const senderName = jidToSignalSenderKeyName(group, meId, ids)
 			const builder = new GroupSessionBuilder(storage)
 
 			const senderNameStr = senderName.toString()
@@ -86,22 +97,32 @@ export function makeLibSignalRepository(auth: SignalAuthState): SignalRepository
 			}
 		},
 		async injectE2ESession({ jid, session }) {
-			const cipher = new libsignal.SessionBuilder(storage, jidToSignalProtocolAddress(jid))
+			const cipher = new libsignal.SessionBuilder(storage, jidToSignalProtocolAddress(jid, ids))
 			await cipher.initOutgoing(session)
 		},
 		jidToSignalProtocolAddress(jid) {
-			return jidToSignalProtocolAddress(jid).toString()
+			return jidToSignalProtocolAddress(jid, ids).toString()
+		},
+		// KWHATS: por onde o decodificador de stanza alimenta o mapa. O WhatsApp
+		// manda as duas identidades nos atributos (sender_pn/sender_lid e
+		// participant_pn/participant_lid) e o upstream simplesmente as ignorava.
+		linkIdentity(lidJid, pnJid) {
+			ids.link(lidJid, pnJid)
 		}
 	}
 }
 
-const jidToSignalProtocolAddress = (jid: string) => {
-	const { user, device } = jidDecode(jid)!
+// KWHATS: passa pelo mapa antes de virar endereço. É o funil por onde TODA
+// sessão nasce, tanto na cifragem quanto na decifragem, então canonizar aqui
+// garante que os dois lados usem o mesmo arquivo. Canonizar só na decifragem
+// seria o mesmo bug pelo avesso.
+const jidToSignalProtocolAddress = (jid: string, ids?: DeviceIdentity) => {
+	const { user, device } = jidDecode(ids ? ids.canonical(jid) : jid)!
 	return new libsignal.ProtocolAddress(user, device || 0)
 }
 
-const jidToSignalSenderKeyName = (group: string, user: string): SenderKeyName => {
-	return new SenderKeyName(group, jidToSignalProtocolAddress(user))
+const jidToSignalSenderKeyName = (group: string, user: string, ids?: DeviceIdentity): SenderKeyName => {
+	return new SenderKeyName(group, jidToSignalProtocolAddress(user, ids))
 }
 
 function signalStorage({ creds, keys }: SignalAuthState): SenderKeyStore & Record<string, any> {

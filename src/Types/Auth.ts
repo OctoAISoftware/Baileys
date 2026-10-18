@@ -96,7 +96,12 @@ export type TransactionCapabilityOptions = {
 }
 
 export type SignalAuthState = {
-	creds: SignalCreds
+	// KWHATS: `me` entrou no tipo porque o repositório Signal precisa das DUAS
+	// identidades da conta (número e LID) para não abrir duas sessões com o
+	// próprio aparelho. O socket sempre passou AuthenticationCreds aqui, que já
+	// carrega `me`; o tipo é que declarava só o subconjunto e escondia isso.
+	// Opcional, então quem monta um SignalAuthState à mão continua válido.
+	creds: SignalCreds & { me?: Contact }
 	keys: SignalKeyStore | SignalKeyStoreWithTransaction
 }
 

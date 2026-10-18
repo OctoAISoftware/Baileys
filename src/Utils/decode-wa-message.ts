@@ -154,6 +154,29 @@ export const decryptMessageNode = (
 		category: stanza.attrs.category,
 		author,
 		async decrypt() {
+			// The server tags every message stanza with the sender's OTHER identity:
+			// a stanza addressed by phone number carries `sender_lid` (or
+			// `participant_lid` in groups), one addressed by LID carries
+			// `sender_pn` / `participant_pn`. Upstream copied them into the key and
+			// never used them; they are exactly what is needed to know that a LID
+			// and a phone number are the same account, so that one physical device
+			// gets ONE Signal session instead of two diverging ratchets.
+			// Note the pairing: the alt attribute is paired with the address the
+			// stanza actually came from — a stanza never carries both alts.
+			if (repository.linkIdentity) {
+				const sender = stanza.attrs.participant || stanza.attrs.from
+				const altLid = stanza.attrs.participant ? stanza.attrs.participant_lid : stanza.attrs.sender_lid
+				const altPn = stanza.attrs.participant ? stanza.attrs.participant_pn : stanza.attrs.sender_pn
+				if (sender && isLidUser(sender)) {
+					repository.linkIdentity(sender, altPn)
+				} else if (sender && isJidUser(sender)) {
+					repository.linkIdentity(altLid, sender)
+				}
+
+				repository.linkIdentity(stanza.attrs.sender_lid, stanza.attrs.sender_pn)
+				repository.linkIdentity(stanza.attrs.participant_lid, stanza.attrs.participant_pn)
+			}
+
 			let decryptables = 0
 			if (Array.isArray(stanza.content)) {
 				for (const { tag, attrs, content } of stanza.content) {

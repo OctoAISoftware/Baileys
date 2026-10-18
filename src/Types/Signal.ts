@@ -63,4 +63,10 @@ export type SignalRepository = {
 	}>
 	injectE2ESession(opts: E2ESessionOpts): Promise<void>
 	jidToSignalProtocolAddress(jid: string): string
+	/**
+	 * KWHATS: registra que um LID e um número são a mesma conta, para que o
+	 * mesmo aparelho físico use SEMPRE o mesmo endereço de sessão Signal.
+	 * Opcional: repositórios de terceiros seguem válidos sem implementar.
+	 */
+	linkIdentity?(lidJid?: string | null, pnJid?: string | null): void
 }
