@@ -1,5 +1,5 @@
 /* @ts-ignore */
-import { deriveSecrets } from 'libsignal/src/crypto'
+import { deriveSecrets } from 'kwhats-signal/src/crypto'
 
 export class SenderMessageKey {
 	private readonly iteration: number

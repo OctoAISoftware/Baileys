@@ -1,5 +1,5 @@
-/* @ts-ignore */
-import * as libsignal from 'libsignal'
+import * as libsignal from 'kwhats-signal'
+import type { SignalStorage } from 'kwhats-signal'
 import type { SignalAuthState } from '../Types'
 import type { SignalRepository } from '../Types/Signal'
 import { generateSignalPubKey } from '../Utils'
@@ -21,7 +21,12 @@ export function makeLibSignalRepository(auth: SignalAuthState, identity?: Device
 	// número ora por LID. Sem isto, o cliente racha a sessão consigo mesmo.
 	ids.link(auth.creds?.me?.lid, auth.creds?.me?.id)
 
-	const storage: SenderKeyStore = signalStorage(auth)
+	// KWHATS: era `SenderKeyStore`, o que estreitava o tipo e escondia metade do
+	// que este objeto de fato implementa. signalStorage() devolve as duas coisas
+	// (é o que o SessionCipher e o GroupCipher exigem, cada um de um lado), e o
+	// upstream contornava isso com @ts-ignore no import. Declarar a interseção é
+	// a verdade e faz o compilador voltar a proteger os dois caminhos.
+	const storage: SenderKeyStore & SignalStorage = signalStorage(auth)
 	return {
 		decryptGroupMessage({ group, authorJid, msg }) {
 			const senderName = jidToSignalSenderKeyName(group, authorJid, ids)
@@ -125,7 +130,7 @@ const jidToSignalSenderKeyName = (group: string, user: string, ids?: DeviceIdent
 	return new SenderKeyName(group, jidToSignalProtocolAddress(user, ids))
 }
 
-function signalStorage({ creds, keys }: SignalAuthState): SenderKeyStore & Record<string, any> {
+function signalStorage({ creds, keys }: SignalAuthState): SenderKeyStore & SignalStorage & Record<string, any> {
 	return {
 		loadSession: async (id: string) => {
 			const { [id]: sess } = await keys.get('session', [id])

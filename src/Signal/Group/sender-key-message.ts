@@ -1,5 +1,5 @@
 /* @ts-ignore */
-import { calculateSignature, verifySignature } from 'libsignal/src/curve'
+import { calculateSignature, verifySignature } from 'kwhats-signal/src/curve'
 import { proto } from '../../../WAProto/index.js'
 import { CiphertextMessage } from './ciphertext-message'
 

@@ -1,5 +1,5 @@
 /* @ts-ignore */
-import { calculateMAC } from 'libsignal/src/crypto'
+import { calculateMAC } from 'kwhats-signal/src/crypto'
 import { SenderMessageKey } from './sender-message-key'
 
 export class SenderChainKey {

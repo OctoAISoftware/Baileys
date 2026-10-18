@@ -1,5 +1,5 @@
 /* @ts-ignore */
-import { decrypt, encrypt } from 'libsignal/src/crypto'
+import { decrypt, encrypt } from 'kwhats-signal/src/crypto'
 import queueJob from './queue-job'
 import { SenderKeyMessage } from './sender-key-message'
 import { SenderKeyName } from './sender-key-name'
